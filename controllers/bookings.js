@@ -99,6 +99,8 @@ exports.getBooking = async (req, res, next) => {
 exports.addBooking = async (req, res, next) => {
   try {
     req.body.shop = req.params.shopId;
+
+    // Check if the shop exists
     const shop = await Shop.findById(req.params.shopId);
     if (!shop) {
       return res.status(404).json({
@@ -106,39 +108,36 @@ exports.addBooking = async (req, res, next) => {
         message: `No shop with the id of ${req.params.shopId}`,
       });
     }
+
     req.body.user = req.user.id;
 
-    // only allow the registered user to book up to 3 tables
+    // Restrict the user to a maximum of 3 bookings
     const existedBookings = await Booking.find({ user: req.user.id });
-
     if (existedBookings.length >= 3) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `The user with ID ${req.user.id} has already made 3 bookings` });
-    }
-    else {
-      const booking = await Booking.create(req.body);
-      res.status(200).json({
-        success: true,
-        data: booking,
+      return res.status(400).json({
+        success: false,
+        message: `The user with ID ${req.user.id} has already made 3 bookings`,
       });
+    }
 
-      User.findById(req.user.id, function (err, user) {
-        if (err) {
-          console.log(err);
-        } else {
-          sendMail(user, booking);
-        }
-      });
-    }
+    // Create the booking
+    const booking = await Booking.create(req.body);
+
+    // Send booking success response
+    res.status(200).json({
+      success: true,
+      data: booking,
+    });
+
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({
+    console.error("Error creating booking:", error);
+    res.status(500).json({
       success: false,
       message: "Cannot create Booking",
     });
   }
 };
+
 
 //@desc     Update booking
 //@route    PUT /api/v1/bookings/:id
@@ -194,7 +193,8 @@ exports.deleteBooking = async (req, res, next) => {
         message: `User ${req.user.id} is not authorized to delete this booking`,
       });
     }
-    await booking.remove();
+    // Use deleteOne if remove fails
+    await Booking.deleteOne({ _id: req.params.id });
     res.status(200).json({ success: true, data: {} });
   } catch (error) {
     console.log(error);
